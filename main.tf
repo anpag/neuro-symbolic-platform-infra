@@ -25,6 +25,18 @@ resource "google_service_account" "pubsub_sa" {
   description  = "Service account for Pub/Sub publishing/subscribing"
 }
 
+resource "google_service_account" "eventarc_sa" {
+  account_id   = "eventarc-sa"
+  display_name = "Eventarc Service Account"
+  description  = "Service account for Eventarc Triggers"
+}
+
+resource "google_project_iam_member" "eventarc_event_receiver" {
+  project = var.project_id
+  role    = "roles/eventarc.eventReceiver"
+  member  = "serviceAccount:${google_service_account.eventarc_sa.email}"
+}
+
 # Grant Cloud Run SA permissions
 resource "google_project_iam_member" "cloud_run_bq_data_editor" {
   project = var.project_id
@@ -36,6 +48,29 @@ resource "google_project_iam_member" "cloud_run_pubsub_publisher" {
   project = var.project_id
   role    = "roles/pubsub.publisher"
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
+# Grant Vertex AI User to Cloud Run SA (for Gemini)
+resource "google_project_iam_member" "cloud_run_vertex_user" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
+# Grant Storage Object Viewer to Cloud Run SA (to read documents)
+resource "google_project_iam_member" "cloud_run_storage_viewer" {
+  project = var.project_id
+  role    = "roles/storage.objectViewer"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
+# Enable Eventarc to invoke Cloud Run
+resource "google_cloud_run_service_iam_member" "eventarc_invoker" {
+  location = google_cloud_run_v2_service.semantic_engine.location
+  project  = var.project_id
+  service  = google_cloud_run_v2_service.semantic_engine.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.eventarc_sa.email}"
 }
 
 # Pub/Sub Topics
@@ -84,4 +119,40 @@ resource "google_cloud_run_v2_service" "semantic_engine" {
       }
     }
   }
+}
+
+# GCS Bucket for Unstructured Documents
+resource "google_storage_bucket" "unstructured_docs" {
+  name          = "${var.project_id}-unstructured-docs"
+  location      = "US"
+  force_destroy = true
+}
+
+# Eventarc Trigger: GCS -> Cloud Run
+resource "google_eventarc_trigger" "gcs_to_cloud_run" {
+  name     = "gcs-upload-to-langgraph"
+  location = "us-central1"
+  service_account = google_service_account.eventarc_sa.email
+
+  matching_criteria {
+    attribute = "type"
+    value     = "google.cloud.storage.object.v1.finalized"
+  }
+  
+  matching_criteria {
+    attribute = "bucket"
+    value     = google_storage_bucket.unstructured_docs.name
+  }
+
+  destination {
+    cloud_run_service {
+      service = google_cloud_run_v2_service.semantic_engine.name
+      region  = var.region
+    }
+  }
+
+  depends_on = [
+    google_project_iam_member.eventarc_event_receiver,
+    google_cloud_run_service_iam_member.eventarc_invoker
+  ]
 }
