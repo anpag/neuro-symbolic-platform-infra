@@ -12,6 +12,28 @@ provider "google" {
   region  = var.region
 }
 
+# Enable Required GCP APIs
+locals {
+  services = [
+    "serviceusage.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
+    "aiplatform.googleapis.com",
+    "eventarc.googleapis.com",
+    "eventarcpublishing.googleapis.com",
+    "pubsub.googleapis.com",
+    "run.googleapis.com",
+    "bigquery.googleapis.com",
+    "storage.googleapis.com"
+  ]
+}
+
+resource "google_project_service" "enabled_services" {
+  for_each           = toset(locals.services)
+  project            = var.project_id
+  service            = each.key
+  disable_on_destroy = false
+}
+
 # IAM Service Accounts
 resource "google_service_account" "cloud_run_sa" {
   account_id   = "cloud-run-sa"
