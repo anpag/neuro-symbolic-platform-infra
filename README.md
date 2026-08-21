@@ -1,40 +1,34 @@
-# Semantic Platform Infrastructure
+# Neuro-Symbolic Platform Infrastructure
 
-This repository contains the Terraform definitions for the infrastructure behind the Semantic Platform.
+Production Terraform infrastructure configurations for the Neuro-Symbolic Knowledge Platform on Google Cloud Platform.
 
-## Orchestration Overview
+## Architecture Overview
 
-The Semantic Platform relies on an event-driven architecture hosted on Google Cloud Platform:
+1. **Reasoning Engine (Cloud Run v2)**:
+   - High-performance container running native Rust GEB engine and FastAPI orchestration.
+   - Resource limits: **8GB RAM / 4 CPUs**.
+   - Dedicated least-privilege service account (`reasoning-engine-sa`) with BigQuery and Secret Manager access.
 
-1. **Pub/Sub Topics**:
-   - `raw-graph-events`: Ingests initial, unprocessed events regarding the semantic graph.
-   - `inferred-graph-events`: Distributes newly derived relations and insights after reasoning.
+2. **Extraction Agents (Cloud Run v2)**:
+   - LangGraph + Vertex AI Gemini multimodal document processing microservice.
+   - Resource limits: **2GB RAM / 2 CPUs**.
+   - Dedicated service account (`extraction-agents-sa`) with `roles/aiplatform.user`, `roles/pubsub.publisher`, and `roles/storage.objectViewer`.
 
-2. **Cloud Run Service**:
-   - Hosts the Semantic Reasoning Engine.
-   - Listens to or pulls from the `raw-graph-events` topic.
-   - Processes events and publishes newly inferred facts to `inferred-graph-events`.
-   - Runs securely under its own dedicated Service Account (`cloud-run-sa`) with strictly scoped IAM privileges.
+3. **Dataform Integration**:
+   - `google_dataform_repository` managing Relational SHACL data quality and property graph transformations in BigQuery.
+   - IAM permissions granted to Dataform service account (`roles/bigquery.dataEditor`, `roles/bigquery.jobUser`, `roles/secretmanager.secretAccessor`).
 
-3. **BigQuery**:
-   - A dataset `semantic_graph_data` acts as the analytical warehouse, persisting all semantic events for auditing and deep analysis.
+4. **Event-Driven Ingestion**:
+   - GCS bucket for document ingestion (`${project_id}-unstructured-docs`).
+   - Eventarc trigger invoking Extraction Agents upon `google.cloud.storage.object.v1.finalized`.
+   - Pub/Sub topics: `raw-graph-events`, `inferred-graph-events`.
 
-## Infrastructure Setup
+## Validation & Deployment
 
-### Prerequisites
-- Terraform ~> 5.0
-- Google Cloud SDK (`gcloud`) authenticated to your project.
+```bash
+terraform init -backend=false
+terraform validate
+terraform plan -var="project_id=YOUR_PROJECT_ID"
+terraform apply -var="project_id=YOUR_PROJECT_ID"
+```
 
-### Deployment
-1. Initialize Terraform:
-   ```bash
-   terraform init
-   ```
-2. Plan the deployment:
-   ```bash
-   terraform plan -var="project_id=YOUR_PROJECT_ID"
-   ```
-3. Apply the configuration:
-   ```bash
-   terraform apply -var="project_id=YOUR_PROJECT_ID"
-   ```

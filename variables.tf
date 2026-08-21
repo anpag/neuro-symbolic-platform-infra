@@ -4,19 +4,43 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "The GCP region"
+  description = "The GCP region for deployments"
   type        = string
   default     = "us-central1"
 }
 
-variable "cloud_run_service_name" {
-  description = "The name of the Cloud Run service"
+variable "reasoning_engine_service_name" {
+  description = "The name of the Reasoning Engine Cloud Run service"
   type        = string
-  default     = "semantic-reasoning-engine"
+  default     = "reasoning-engine"
+}
+
+variable "extraction_agents_service_name" {
+  description = "The name of the Extraction Agents Cloud Run service"
+  type        = string
+  default     = "extraction-agents"
+}
+
+variable "reasoning_engine_image" {
+  description = "Container image for Reasoning Engine"
+  type        = string
+  default     = "us-docker.pkg.dev/cloudrun/container/hello"
+}
+
+variable "extraction_agents_image" {
+  description = "Container image for Extraction Agents"
+  type        = string
+  default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
 
 variable "bq_dataset_name" {
-  description = "The name of the BigQuery dataset"
+  description = "The name of the primary BigQuery dataset"
   type        = string
-  default     = "semantic_graph_data"
+  default     = "kg_production"
+}
+
+variable "dataform_repo_name" {
+  description = "The name of the Dataform repository"
+  type        = string
+  default     = "knowledge-graph-dataform"
 }
